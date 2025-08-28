@@ -1,0 +1,10 @@
+# Redirigir errores al index (ideal para SPAs con JS routing)
+ErrorDocument 404 /index.php
+
+# Seguridad básica
+<FilesMatch "\.(env|ini|log|sql|bak)$">
+  Deny from all
+</FilesMatch>
+
+# Impedir listado de directorios
+Options -Indexes

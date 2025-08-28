@@ -1,0 +1,22 @@
+# Permitir solo el acceso a archivos PHP
+
+<FilesMatch "\.php$">
+Order allow,deny
+Allow from all
+</FilesMatch>
+
+# Bloquear el acceso a archivos sensibles
+
+<FilesMatch "\.(log|sql|bak|sh|conf|json|env|ini)$">
+Deny from all
+</FilesMatch>
+
+# Opcional: prevenir listado de archivos si no hay index.php
+
+Options -Indexes
+
+# (opcional) Fuerza a que solo se pueda acceder con método GET o POST
+
+<LimitExcept GET POST>
+    Deny from all
+</LimitExcept>
