@@ -1,4 +1,4 @@
-.env
+include/.env
 /vendor/
 *.log
 *.lock

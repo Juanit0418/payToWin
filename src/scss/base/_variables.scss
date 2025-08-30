@@ -1,0 +1,55 @@
+// Fuentes
+$fuente-principal: 'Outfit', sans-serif;
+
+// Tamaño de Media Queries
+$telefono: 480px;
+$tablet: 768px;
+$desktop: 1024px;
+$xl_desktop: 1200px;
+
+// Colores
+$azul: #007df4;
+$secundario: #00c8c2;
+
+$negro: #1a1b15;
+$blanco: #FFFFFF;
+$gris: #64748B;
+$gris-claro: #F8FAFC;
+$gris-oscuro: #1E293B;
+
+$rojo: rgb(169, 0, 0);
+$verde: #02db02;
+
+// Fuentes
+$delgada: 300;
+$regular: 400;
+$bold: 700;
+$black: 900;
+
+    /* Colores generales */
+$fondo-modal: #ffffff;
+$sombra-modal: rgba(0, 0, 0, 0.3);
+$color-texto-base: #000000;
+
+    /* Modal Error */
+$borde-error: #e74c3c;
+$fondo-error: #fceaea;
+$texto-error: #c0392b;
+$fondo-titulo-error: #b41504;
+
+    /* Modal Warning */
+$borde-warning: #f39c12;
+$fondo-warning: #fff5e5;
+$texto-warning: #d35400;
+$fondo-titulo-warning: #d18203;
+
+    /* Modal Message */
+$borde-mensaje: #3498db;
+$fondo-mensaje: #eaf4fc;
+$texto-mensaje: #2980b9;
+$fondo-titulo-mensaje: #0375c2;
+
+    /* Botón cerrar */
+$boton-fondo: #ccc;
+$boton-fondo-hover: #bbb;
+$boton-fondo-active: #999;
