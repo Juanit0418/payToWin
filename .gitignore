@@ -1,4 +1,4 @@
-include/.env
+includes/.env
 /vendor/
 *.log
 *.lock
@@ -6,3 +6,5 @@ include/.env
 node_modules/
 .idea/
 *.bak
+**/.env
+.env
