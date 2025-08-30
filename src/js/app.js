@@ -1,0 +1,21 @@
+//document.addEventListener("DOMContentLoaded", function(){
+//  iniciar_app();
+//});
+
+function iniciar_app(){
+  login();
+  modal();
+  slider();
+};
+
+function login(){
+  alert("Hola desde el login");
+};
+
+function modal(){
+  alert("Hola desde el modal");
+};
+
+function slider(){
+  alert("Hola desde el slider");
+};
