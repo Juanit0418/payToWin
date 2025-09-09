@@ -9,30 +9,48 @@ class Router
 
     public function get($url, $fn)
     {
-        $this->getRoutes[$url] = $fn;
+        $this->getRoutes[rtrim($url, '/')] = $fn;
     }
 
     public function post($url, $fn)
     {
-        $this->postRoutes[$url] = $fn;
+        $this->postRoutes[rtrim($url, '/')] = $fn;
     }
 
     public function comprobarRutas()
     {
+        // Obtener la URL
+        $url_actual = '/';
 
-        $url_actual = $_SERVER['PATH_INFO'] ?? '/';
-        $method = $_SERVER['REQUEST_METHOD'];
-
-        if ($method === 'GET') {
-            $fn = $this->getRoutes[$url_actual] ?? null;
+        if (!empty($_SERVER['PATH_INFO'])) {
+            // PHP embebido
+            $url_actual = $_SERVER['PATH_INFO'];
         } else {
-            $fn = $this->postRoutes[$url_actual] ?? null;
+            // Apache/Nginx
+            $url_actual = $_SERVER['REQUEST_URI'];
+            $url_actual = parse_url($url_actual, PHP_URL_PATH);
+
+            // Si tu proyecto está en subcarpeta, p. ej: '/miApp'
+            $base_path = ''; // Cambiar si aplica
+            if ($base_path && str_starts_with($url_actual, $base_path)) {
+                $url_actual = substr($url_actual, strlen($base_path));
+            }
         }
 
-        if ( $fn ) {
+        // Normalizar: quitar barra final
+        $url_actual = rtrim($url_actual, '/');
+        if ($url_actual === '') $url_actual = '/';
+
+        $method = $_SERVER['REQUEST_METHOD'];
+        $fn = ($method === 'GET') 
+            ? ($this->getRoutes[$url_actual] ?? null) 
+            : ($this->postRoutes[$url_actual] ?? null);
+
+        if ($fn) {
             call_user_func($fn, $this);
         } else {
-            echo "Página No Encontrada o Ruta no válida";
+            http_response_code(404);
+            echo "Página No Encontrada o Ruta no válida: $url_actual";
         }
     }
 
@@ -42,12 +60,9 @@ class Router
             $$key = $value; 
         }
 
-        ob_start(); 
-
+        ob_start();
         include_once __DIR__ . "/views/$view.php";
-
-        $contenido = ob_get_clean(); // Limpia el Buffer
-
+        $contenido = ob_get_clean();
         include_once __DIR__ . '/views/layout.php';
     }
 }
