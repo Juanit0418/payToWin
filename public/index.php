@@ -7,7 +7,7 @@ use Controllers\AuthController;
 use Controllers\HomeController;
 
 $router = new Router();
-$router->get('/', [HomeController::class, 'home']);
+$router->get('/', [HomeController::class, 'Home']);
 // Login
 $router->get('/login', [AuthController::class, 'login']);
 $router->post('/login', [AuthController::class, 'login']);

@@ -5,7 +5,7 @@ namespace Controllers;
 use MVC\Router;
 
 class HomeController {
-    public static function home(Router $router) {
+    public static function Home(Router $router) {
         // Iniciar la sesión si no está iniciada para verificar el usuario
         session_start();
         

@@ -9,7 +9,9 @@ class Router
 
     public function get($url, $fn)
     {
-        $this->getRoutes[rtrim($url, '/')] = $fn;
+        $url = rtrim($url, '/');
+        if ($url === '') $url = '/';
+        $this->getRoutes[$url] = $fn;
     }
 
     public function post($url, $fn)
