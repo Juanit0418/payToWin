@@ -4,10 +4,10 @@
     "type": "project",
     "autoload": {
         "psr-4": {
-            "MVC\\" : "./",
-            "Controllers\\" : "./controllers",
-            "Model\\" : "./models",
-            "Classes\\" : "./classes"
+            "MVC\\": "./",
+            "Controllers\\": "./controllers",
+            "Model\\": "./models",
+            "Classes\\": "./classes"
         }
     },
     "authors": [
@@ -19,5 +19,8 @@
         "phpmailer/phpmailer": "^6.5",
         "vlucas/phpdotenv": "^5.4",
         "intervention/image": "^2.7"
+    },
+    "scripts": {
+        "db:migrate": "php db_models/db_migrate.php"
     }
 }
