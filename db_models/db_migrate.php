@@ -40,90 +40,100 @@ try {
     preg_match_all('/CREATE TABLE `([^`]*)`/i', $expectedSchema, $matches);
     $schemaTables = $matches[1];
 
-    // Crear tablas faltantes
+    // ----------------------------
+    // 1️⃣ Crear tablas faltantes
+    // ----------------------------
     foreach ($schemaTables as $table) {
         if (!in_array($table, $existingTables)) {
             echo "🆕 Tabla faltante: $table. Creando...\n";
-            preg_match('/CREATE TABLE `'.$table.'`(.*?);/is', $expectedSchema, $tableSql);
+            preg_match('/CREATE TABLE `'.$table.'`(.*?)ENGINE=/is', $expectedSchema, $tableSql);
             if (isset($tableSql[0])) {
-                $pdo->exec($tableSql[0]);
+                $createSql = "CREATE TABLE `$table`" . $tableSql[1] . " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+                $pdo->exec($createSql);
                 echo "✅ Tabla $table creada.\n";
             }
         }
     }
 
-    // Eliminar tablas que sobran (opcional, si quieres forzar sincronización)
-    foreach ($existingTables as $table) {
-        if (!in_array($table, $schemaTables)) {
-            echo "🗑️ Tabla extra: $table. Eliminando...\n";
-            $pdo->exec("DROP TABLE `$table`");
-            echo "✅ Tabla $table eliminada.\n";
-        }
-    }
+    // ----------------------------
+    // 2️⃣ Crear columnas faltantes
+    // ----------------------------
+    foreach ($schemaTables as $table) {
+        preg_match('/CREATE TABLE `'.$table.'`(.*?)\)\s*ENGINE=/is', $expectedSchema, $tableSql);
+        if (isset($tableSql[1])) {
+            $tableDef = trim($tableSql[1]);
+            $lines = explode("\n", $tableDef);
 
-    // Crear tablas faltantes
-foreach ($schemaTables as $table) {
-    if (!in_array($table, $existingTables)) {
-        echo "🆕 Tabla faltante: $table. Creando...\n";
+            foreach ($lines as $line) {
+                $line = trim($line, " ,\r\n");
+                if (preg_match('/^`([^`]*)`\s+(.*)$/', $line, $colMatch)) {
+                    $colName = $colMatch[1];
+                    $colDef  = $colMatch[2];
 
-        // Captura toda la definición hasta ENGINE=
-        preg_match('/CREATE TABLE `'.$table.'`(.*?)ENGINE=/is', $expectedSchema, $tableSql);
-        if (isset($tableSql[0])) {
-            $createSql = "CREATE TABLE `$table`" . $tableSql[1] . " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
-            $pdo->exec($createSql);
-            echo "✅ Tabla $table creada.\n";
-        }
-    }
-}
-
-
-     // Extraer la definición completa de la tabla del schema
-preg_match('/CREATE TABLE `'.$table.'`(.*?)\)\s*ENGINE=/is', $expectedSchema, $tableSql);
-if (isset($tableSql[1])) {
-    $tableDef = trim($tableSql[1]);
-
-    // Separar líneas de columnas (ignorar índices al inicio)
-    $lines = explode("\n", $tableDef);
-    foreach ($lines as $line) {
-        $line = trim($line, " ,\r\n");
-        if (preg_match('/^`([^`]*)`\s+(.*)$/', $line, $colMatch)) {
-            $colName = $colMatch[1];
-            $colDef  = $colMatch[2];
-
-            // Si la columna no existe → ADD
-            $stmtCols = $pdo->query("SHOW COLUMNS FROM `$table` LIKE '$colName'");
-            if ($stmtCols->rowCount() === 0) {
-                echo "🆕 Columna faltante en $table: $colName. Agregando...\n";
-                $pdo->exec("ALTER TABLE `$table` ADD COLUMN `$colName` $colDef");
+                    $stmtCols = $pdo->query("SHOW COLUMNS FROM `$table` LIKE '$colName'");
+                    if ($stmtCols->rowCount() === 0) {
+                        echo "🆕 Columna faltante en $table: $colName. Agregando...\n";
+                        $pdo->exec("ALTER TABLE `$table` ADD COLUMN `$colName` $colDef");
+                    }
+                }
             }
         }
     }
-}
 
+    // ----------------------------
+    // 3️⃣ Crear índices y foreign keys
+    // ----------------------------
+    foreach ($schemaTables as $table) {
+        preg_match('/CREATE TABLE `'.$table.'`(.*?)\)\s*ENGINE=/is', $expectedSchema, $tableSql);
+        if (isset($tableSql[1])) {
+            $tableDef = trim($tableSql[1]);
+
+            // Índices
+            preg_match_all('/(UNIQUE KEY .*?\)|KEY .*?\))/is', $tableDef, $indexMatches);
+            foreach ($indexMatches[0] as $indexSql) {
+                try {
+                    $pdo->exec("ALTER TABLE `$table` ADD $indexSql");
+                } catch (\PDOException $e) {
+                    // Ignorar si ya existe
+                }
+            }
+
+            // Foreign keys
+            preg_match_all('/CONSTRAINT .*?FOREIGN KEY .*?\)/is', $tableDef, $fkMatches);
+            foreach ($fkMatches[0] as $fkSql) {
+                try {
+                    $pdo->exec("ALTER TABLE `$table` ADD $fkSql");
+                } catch (\PDOException $e) {
+                    // Ignorar si ya existe
+                }
+            }
+        }
+    }
 
     echo "✅ DB sincronizada con schemaSQL.sql\n";
 
-    // Leer update.sql
+    // ----------------------------
+    // 4️⃣ Aplicar update.sql
+    // ----------------------------
     $updateSql = trim(file_get_contents($updateFile));
     if ($updateSql !== '') {
-        // Crear backup versionado antes de aplicar updates
         if (!is_dir($backupDir)) mkdir($backupDir, 0755, true);
         $version = str_pad(count(glob($backupDir . 'modelV-*.sql')) + 1, 4, '0', STR_PAD_LEFT);
         copy($schemaFile, $backupDir . "modelV-$version.sql");
         echo "📦 Backup creado: modelV-$version.sql\n";
 
-        // Aplicar cambios del update
         $pdo->exec($updateSql);
         echo "🚀 Cambios aplicados en DB\n";
 
-        // Vaciar update.sql
         file_put_contents($updateFile, '');
         echo "✅ update.sql limpiado\n";
     } else {
         echo "✅ No hay cambios en update.sql\n";
     }
 
-    // Regenerar schemaSQL.sql desde la DB
+    // ----------------------------
+    // 5️⃣ Regenerar schemaSQL.sql desde la DB
+    // ----------------------------
     $schemaDump = shell_exec("mysqldump -h $host -u $user -p$pass $db --no-data");
     file_put_contents($schemaFile, $schemaDump);
     echo "📝 schemaSQL.sql actualizado\n";
