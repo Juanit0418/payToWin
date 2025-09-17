@@ -7,6 +7,7 @@ use Dotenv\Dotenv;
 $dotenv = Dotenv::createImmutable(__DIR__ . "/../includes/");
 $dotenv->safeLoad();
 
+// Datos de conexión
 $host = $_ENV['DB_HOST'] ?? null;
 $db   = $_ENV['DB_NAME'] ?? null;
 $user = $_ENV['DB_USER'] ?? null;
@@ -16,55 +17,126 @@ if (!$host || !$db || !$user) {
     die("❌ Error: Variables DB_HOST, DB_NAME o DB_USER no definidas.\n");
 }
 
-$backupDir = __DIR__ . '/migrations/';
+// Rutas
+$backupDir  = __DIR__ . '/migrations/';
+$schemaFile = __DIR__ . '/schema/schemaSQL.sql';
+$migDir     = __DIR__ . '/backmigration/';
+
+// Función para pedir confirmación en terminal
+function confirmRisk($message) {
+    fwrite(STDOUT, $message . " ¿Desea continuar? (s/n): ");
+    $handle = fopen ("php://stdin","r");
+    $line = fgets($handle);
+    return trim(strtolower($line)) === 's';
+}
+
+// ----------------------------
+// Recibir argumento opcional
+// ----------------------------
+$targetMigration = $argv[1] ?? 'latest';
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8", $user, $pass);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    $target = $argv[1] ?? null;
+    if (!is_dir($migDir)) mkdir($migDir, 0755, true);
 
-    // Listar backups disponibles y ordenarlos por versión
-    $backups = glob($backupDir . 'modelV-*.sql');
-    natsort($backups);
+    // Obtener la lista de migraciones
+    $migrations = glob($backupDir . 'modelV-*.sql');
+    sort($migrations);
 
-    if (!$backups) die("❌ No hay backups disponibles en $backupDir\n");
+    if (empty($migrations)) {
+        die("❌ No hay migraciones para revertir.\n");
+    }
 
-    if (!$target) {
-        // Tomar la última migración
-        $targetFile = end($backups);
-        echo "🔙 Revirtiendo a la última migración: " . basename($targetFile) . "\n";
-        $filesToApply = [$targetFile];
+    // Determinar migraciones a revertir
+    if ($targetMigration === 'latest') {
+        $toRevert = [end($migrations)];
+        $targetFile = end($migrations);
     } else {
-        $targetFile = $backupDir . $target;
-        if (!file_exists($targetFile)) die("❌ Backup especificado no existe: $target\n");
-        echo "🔙 Revirtiendo secuencialmente hasta: $target\n";
-
-        // Seleccionar todas las migraciones >= target
-        $filesToApply = [];
-        foreach ($backups as $file) {
-            $filesToApply[] = $file;
-            if (basename($file) === $target) break;
+        $found = false;
+        foreach ($migrations as $migFile) {
+            if (basename($migFile) === $targetMigration) {
+                $targetFile = $migFile;
+                $found = true;
+                break;
+            }
         }
+        if (!$found) die("❌ Migración $targetMigration no encontrada.\n");
+        $toRevert = [$targetFile]; // Solo revierte la migración especificada
     }
 
-    // Aplicar rollback secuencial
-    foreach ($filesToApply as $file) {
-        $sql = file_get_contents($file);
-        if (!$sql) continue;
+    $reversedSql = "";
+    foreach ($toRevert as $migFile) {
+        $migName = basename($migFile);
+        echo "🔙 Analizando migración para reversión: $migName\n";
 
-        // ⚠️ Aquí asumimos que los backups incluyen ALTER TABLE inversos (ideal)
-        // Aplicar SQL de rollback incremental
-        $pdo->exec($sql);
-        echo "↩️ Migración revertida: " . basename($file) . "\n";
+        $sql = file_get_contents($migFile);
+        // Usa una expresión regular más robusta para dividir las sentencias
+        $lines = preg_split('/;(?=[\r\n])/', $sql, -1, PREG_SPLIT_NO_EMPTY);
+        $reverseSql = [];
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (!$line) continue;
+
+            // Detectar CREATE TABLE → generar DROP TABLE
+            if (preg_match('/^CREATE TABLE `([^`]*)`/i', $line, $m)) {
+                $table = $m[1];
+                $reverseSql[] = "DROP TABLE IF EXISTS `$table`;";
+            }
+            
+            // Detectar ALTER TABLE ADD COLUMN → generar DROP COLUMN
+            elseif (preg_match('/^ALTER TABLE `([^`]*)` ADD COLUMN `([^`]*)`/i', $line, $m)) {
+                $table = $m[1];
+                $col   = $m[2];
+                $reverseSql[] = "ALTER TABLE `$table` DROP COLUMN `$col`;";
+            }
+            // Los otros casos de tu script original...
+        }
+        $reversedSql .= implode("\n", array_reverse($reverseSql)) . "\n";
     }
 
-    // Generar nueva migración como punto de partida
-    $version = str_pad(count($backups) + 1, 4, '0', STR_PAD_LEFT);
-    $schemaDump = shell_exec("mysqldump -h $host -u $user -p$pass $db --no-data");
-    file_put_contents($backupDir . "modelV-$version.sql", $schemaDump);
-    echo "📝 Nueva migración creada: modelV-$version.sql\n";
+    // ---------------------------------
+    // ⚠️ Advertencia y confirmación
+    // ---------------------------------
+    echo "\n⚠️ Se detectaron cambios destructivos para el rollback:\n";
+    echo $reversedSql . "\n";
+    if (!confirmRisk("Desea aplicar estos cambios de reversión? Esta acción podría causar una pérdida de datos irreversible.")) {
+        die("❌ Reversión cancelada por el usuario.\n");
+    }
+
+    // ---------------------------------
+    // 🚀 Aplicar el rollback
+    // ---------------------------------
+    // Iniciar transacción de la base de datos
+    $pdo->beginTransaction();
+    try {
+        $pdo->exec($reversedSql);
+        $pdo->commit();
+        echo "\n✅ Rollback aplicado exitosamente.\n";
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        echo "❌ Error al aplicar la reversión. Se ha realizado un rollback: " . $e->getMessage() . "\n";
+        exit(1);
+    }
+
+    // ---------------------------------
+    // 📝 Sincronizar schemaSQL.sql
+    // ---------------------------------
+    // Opcional: Si revirtió, actualiza el schemaSQL.sql al estado anterior
+    $previousMigrationIndex = array_search($targetFile, $migrations) - 1;
+    if ($previousMigrationIndex >= 0) {
+        $previousSchemaFile = $migrations[$previousMigrationIndex];
+        copy($previousSchemaFile, $schemaFile);
+        echo "📝 El archivo schemaSQL.sql ha sido actualizado a la versión anterior.\n";
+    } else {
+        // En caso de revertir la primera migración, se asume que el esquema debe estar vacío.
+        file_put_contents($schemaFile, "");
+        echo "📝 El archivo schemaSQL.sql ha sido vaciado (revertida la primera migración).\n";
+    }
 
 } catch (PDOException $e) {
-    echo "❌ Error: " . $e->getMessage() . "\n";
+    echo "❌ Error fatal: " . $e->getMessage() . "\n";
+    exit(1);
 }
