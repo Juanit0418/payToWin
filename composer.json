@@ -21,6 +21,8 @@
         "intervention/image": "^2.7"
     },
     "scripts": {
-        "db:migrate": "php db_models/db_migrate.php"
+        "db:migrate": "php db_models/db_migrate.php",
+        "backmigrate:latest": "php db_models/db_backmigration.php",
+        "backmigrate": "php db_models/db_backmigration.php"
     }
 }
