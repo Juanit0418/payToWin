@@ -22,7 +22,7 @@ function autenticado(){
     iniciar_sesion();
     
     if(isset($_SESSION["login"])){
-        header("Location: /paytowin");
+        header("Location: /localhost");
         exit;
     };
 };
