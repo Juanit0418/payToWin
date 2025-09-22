@@ -25,8 +25,7 @@ $updateFile = __DIR__ . '/updates/update.sql';
 // Función para pedir confirmación en terminal
 function confirmRisk($message) {
     fwrite(STDOUT, $message . " ¿Desea continuar? (s/n): ");
-    $handle = fopen ("php://stdin","r");
-    $line = fgets($handle);
+    $line = fgets(STDIN);
     return trim(strtolower($line)) === 's';
 }
 
@@ -36,8 +35,32 @@ try {
 
     echo "🔍 Verificando consistencia de schema...\n";
 
+    // ---------------------------------
+    // 📂 Verificar si schemaSQL.sql está vacío
+    // ---------------------------------
+    if (!file_exists($schemaFile) || trim(file_get_contents($schemaFile)) === '') {
+        echo "⚠️ El archivo schemaSQL.sql está vacío.\n";
+        if (confirmRisk("¿Desea exportar el esquema actual de la base de datos a schemaSQL.sql?")) {
+            $dumpCommand = sprintf(
+                'mysqldump -h%s -u%s -p%s --no-data %s > %s',
+                escapeshellarg($host),
+                escapeshellarg($user),
+                $pass ? escapeshellarg($pass) : '',
+                escapeshellarg($db),
+                escapeshellarg($schemaFile)
+            );
+            system($dumpCommand, $retval);
+            if ($retval === 0) {
+                echo "✅ Esquema exportado correctamente a $schemaFile\n";
+            } else {
+                die("❌ Error al exportar el esquema. Código: $retval\n");
+            }
+        } else {
+            die("⏩ Exportación de esquema cancelada.\n");
+        }
+    }
+
     // Leer schema esperado
-    if (!file_exists($schemaFile)) die("❌ schemaSQL.sql no encontrado\n");
     $expectedSchema = file_get_contents($schemaFile);
 
     // Obtener tablas actuales en DB
@@ -53,126 +76,49 @@ try {
     // ----------------------------
     $riskyChanges = [];
 
-    // Tablas a eliminar
     foreach ($existingTables as $table) {
         if (!in_array($table, $schemaTables)) {
             $riskyChanges[] = "Tabla '$table' existe en la DB pero no en schema. Se eliminaría y perderías todos los registros.";
         }
     }
 
-    // Columnas a eliminar o cambios de tipo
     foreach ($schemaTables as $table) {
+        if (!in_array($table, $existingTables)) continue;
+
         $stmtCols = $pdo->query("SHOW COLUMNS FROM `$table`");
         $dbColumns = array_column($stmtCols->fetchAll(PDO::FETCH_ASSOC), null, 'Field');
 
         preg_match('/CREATE TABLE `'.$table.'`(.*?)\)\s*ENGINE=/is', $expectedSchema, $tableSql);
-        if (isset($tableSql[1])) {
-            $tableDef = trim($tableSql[1]);
-            preg_match_all('/^`([^`]*)`\s+(.*)$/m', $tableDef, $matches, PREG_SET_ORDER);
-            $schemaCols = array_column($matches, 2, 1);
+        if (!isset($tableSql[1])) continue;
 
-            foreach ($dbColumns as $colName => $colInfo) {
-                if (!isset($schemaCols[$colName])) {
-                    $riskyChanges[] = "Columna '$colName' en tabla '$table' existe en la DB pero no en schema. Se eliminarían sus datos.";
-                } else {
-                    $schemaType = strtolower($schemaCols[$colName]);
-                    $dbType     = strtolower($colInfo['Type']);
-                    if ($schemaType !== $dbType) {
-                        $riskyChanges[] = "Columna '$colName' en tabla '$table' cambiará de tipo '$dbType' a '$schemaType'. Posible pérdida de datos.";
-                    }
+        $tableDef = trim($tableSql[1]);
+        preg_match_all('/`([^`]*)`\s+([^,]+)/', $tableDef, $colMatches, PREG_SET_ORDER);
+        $schemaCols = [];
+        foreach ($colMatches as $m) $schemaCols[$m[1]] = strtolower(trim($m[2]));
+
+        foreach ($dbColumns as $colName => $colInfo) {
+            if (!isset($schemaCols[$colName])) {
+                $riskyChanges[] = "Columna '$colName' en tabla '$table' existe en DB pero no en schema.";
+            } else {
+                $dbType     = strtolower($colInfo['Type']);
+                $schemaType = strtolower($schemaCols[$colName]);
+                if (strpos($schemaType, $dbType) === false) {
+                    $riskyChanges[] = "Columna '$colName' en tabla '$table' difiere: DB='$dbType', schema='$schemaType'";
                 }
             }
         }
     }
 
-    // Si hay riesgos, pedir confirmación
     if (!empty($riskyChanges)) {
         echo "⚠️ Riesgos detectados antes de aplicar cambios:\n";
-        foreach ($riskyChanges as $r) {
-            echo "  - $r\n";
-        }
-        if (!confirmRisk("Hay cambios que podrían afectar datos existentes")) {
+        foreach ($riskyChanges as $r) echo "  - $r\n";
+        if (!confirmRisk("¿Desea continuar con la migración a pesar de los riesgos?")) {
             die("❌ Migración cancelada por el usuario.\n");
         }
     }
 
-    // Iniciar transacción
-    $pdo->beginTransaction();
-
-    try {
-        // ----------------------------
-        // 1️⃣ Crear tablas faltantes
-        // ----------------------------
-        foreach ($schemaTables as $table) {
-            if (!in_array($table, $existingTables)) {
-                echo "🆕 Tabla faltante: $table. Creando...\n";
-                preg_match('/CREATE TABLE `'.$table.'`(.*?)ENGINE=/is', $expectedSchema, $tableSql);
-                if (isset($tableSql[0])) {
-                    $createSql = "CREATE TABLE `$table`" . $tableSql[1] . " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
-                    $pdo->exec($createSql);
-                    echo "✅ Tabla $table creada.\n";
-                }
-            }
-        }
-
-        // ----------------------------
-        // 2️⃣ Crear columnas faltantes
-        // ----------------------------
-        foreach ($schemaTables as $table) {
-            preg_match('/CREATE TABLE `'.$table.'`(.*?)\)\s*ENGINE=/is', $expectedSchema, $tableSql);
-            if (isset($tableSql[1])) {
-                $tableDef = trim($tableSql[1]);
-                $lines = explode("\n", $tableDef);
-
-                foreach ($lines as $line) {
-                    $line = trim($line, " ,\r\n");
-                    if (preg_match('/^`([^`]*)`\s+(.*)$/', $line, $colMatch)) {
-                        $colName = $colMatch[1];
-                        $colDef  = $colMatch[2];
-
-                        $stmtCols = $pdo->query("SHOW COLUMNS FROM `$table` LIKE '$colName'");
-                        if ($stmtCols->rowCount() === 0) {
-                            echo "🆕 Columna faltante en $table: $colName. Agregando...\n";
-                            $pdo->exec("ALTER TABLE `$table` ADD COLUMN `$colName` $colDef");
-                        }
-                    }
-                }
-            }
-        }
-
-        // ----------------------------
-        // 3️⃣ Crear índices y foreign keys
-        // ----------------------------
-        foreach ($schemaTables as $table) {
-            preg_match('/CREATE TABLE `'.$table.'`(.*?)\)\s*ENGINE=/is', $expectedSchema, $tableSql);
-            if (isset($tableSql[1])) {
-                $tableDef = trim($tableSql[1]);
-
-                // Índices
-                preg_match_all('/(UNIQUE KEY .*?\)|KEY .*?\))/is', $tableDef, $indexMatches);
-                foreach ($indexMatches[0] as $indexSql) {
-                    try { $pdo->exec("ALTER TABLE `$table` ADD $indexSql"); } catch (\PDOException $e) {}
-                }
-
-                // Foreign keys
-                preg_match_all('/CONSTRAINT .*?FOREIGN KEY .*?\)/is', $tableDef, $fkMatches);
-                foreach ($fkMatches[0] as $fkSql) {
-                    try { $pdo->exec("ALTER TABLE `$table` ADD $fkSql"); } catch (\PDOException $e) {}
-                }
-            }
-        }
-        
-        $pdo->commit();
-        echo "✅ DB sincronizada con schemaSQL.sql\n";
-
-    } catch (PDOException $e) {
-        $pdo->rollBack();
-        echo "❌ Error en la migración. Rollback ejecutado: " . $e->getMessage() . "\n";
-        exit;
-    }
-
     // ----------------------------
-    // 4️⃣ Aplicar update.sql
+    // 1️⃣ Aplicar update.sql
     // ----------------------------
     $updateSql = trim(file_get_contents($updateFile));
     if ($updateSql !== '') {
@@ -181,7 +127,6 @@ try {
         copy($schemaFile, $backupDir . "modelV-$version.sql");
         echo "📦 Backup creado: modelV-$version.sql\n";
 
-        // Iniciar transacción para el update.sql
         $pdo->beginTransaction();
         try {
             $pdo->exec($updateSql);
@@ -189,8 +134,7 @@ try {
             echo "🚀 Cambios aplicados en DB\n";
         } catch (PDOException $e) {
             $pdo->rollBack();
-            echo "❌ Error al aplicar update.sql. Rollback ejecutado: " . $e->getMessage() . "\n";
-            exit;
+            die("❌ Error al aplicar update.sql. Rollback ejecutado: " . $e->getMessage() . "\n");
         }
 
         file_put_contents($updateFile, '');
@@ -200,18 +144,50 @@ try {
     }
 
     // ----------------------------
-    // 5️⃣ Regenerar schemaSQL.sql desde la DB (Saneado)
+    // 2️⃣ Aplicar índices y claves foráneas solo si no existen
     // ----------------------------
-    // Saneamiento de variables para shell_exec
-    $escapedHost = escapeshellarg($host);
-    $escapedUser = escapeshellarg($user);
-    $escapedPass = escapeshellarg($pass);
-    $escapedDb   = escapeshellarg($db);
-    
-    // Nota: El uso de -p sin espacio y con la variable escapada es una práctica común para mysqldump
-    $command = "mysqldump -h $escapedHost -u $escapedUser -p$escapedPass $escapedDb --no-data";
+    foreach ($schemaTables as $table) {
+        preg_match('/CREATE TABLE `'.$table.'`(.*?)\)\s*ENGINE=/is', $expectedSchema, $tableSql);
+        if (!isset($tableSql[1])) continue;
+
+        $tableDef = trim($tableSql[1]);
+
+        // ----------------
+        // Índices
+        // ----------------
+        preg_match_all('/(UNIQUE KEY `([^`]*)` .*?|KEY `([^`]*)` .*?)/is', $tableDef, $indexMatches, PREG_SET_ORDER);
+        foreach ($indexMatches as $idx) {
+            $indexName = $idx[2] ?: $idx[3];
+            $stmtCheck = $pdo->query("SHOW INDEX FROM `$table` WHERE Key_name = '$indexName'");
+            if ($stmtCheck->rowCount() === 0) {
+                try { $pdo->exec("ALTER TABLE `$table` ADD {$idx[1]}"); } catch (\PDOException $e) { echo "⚠️ No se pudo agregar índice $indexName: ".$e->getMessage()."\n"; }
+            }
+        }
+
+        // ----------------
+        // Foreign Keys
+        // ----------------
+        preg_match_all('/CONSTRAINT `([^`]*)` FOREIGN KEY .*?\)/is', $tableDef, $fkMatches, PREG_SET_ORDER);
+        foreach ($fkMatches as $fk) {
+            $fkName = $fk[1];
+            $stmtCheck = $pdo->query("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='$table' AND CONSTRAINT_NAME='$fkName'");
+            if ($stmtCheck->rowCount() === 0) {
+                try { $pdo->exec("ALTER TABLE `$table` ADD {$fk[0]}"); } catch (\PDOException $e) { echo "⚠️ No se pudo agregar FK $fkName: ".$e->getMessage()."\n"; }
+            }
+        }
+    }
+
+    // ----------------------------
+    // 3️⃣ Regenerar schemaSQL.sql desde la DB
+    // ----------------------------
+    $command = sprintf(
+        'mysqldump -h%s -u%s -p%s --no-data %s',
+        escapeshellarg($host),
+        escapeshellarg($user),
+        $pass ? escapeshellarg($pass) : '',
+        escapeshellarg($db)
+    );
     $schemaDump = shell_exec($command);
-    
     file_put_contents($schemaFile, $schemaDump);
     echo "📝 schemaSQL.sql actualizado\n";
 
