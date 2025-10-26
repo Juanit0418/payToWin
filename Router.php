@@ -22,7 +22,7 @@ class Router
     public function comprobarRutas()
     {
         // Obtener la URL
-        $url_actual = '/';
+        $url_actual = strtok($_SERVER['REQUEST_URI'], '?') ?? '/';
 
         if (!empty($_SERVER['PATH_INFO'])) {
             // PHP embebido

@@ -17,3 +17,11 @@ h3 {
 .text-center {
     text-align: center;
 }
+
+[class$="__heading"]{
+    @include m.nombre_pagina;
+}
+
+[class$="__descripcion"]{
+    @include m.descripcion_pagina;
+}

@@ -4,7 +4,7 @@ namespace Model;
 
 class Usuario extends ActiveRecord {
     protected static $tabla = 'usuarios';
-    protected static $columnasDB = ['id', 'nombre', 'apellido', 'email', 'password', 'token', 'rol', 'confirmado'];
+    protected static $columnasDB = ['id', 'nombre', 'apellido', 'email', 'password', 'token', 'rol', 'confirmado', 'token_google'];
 
     public $id;
     public $nombre;
@@ -14,6 +14,7 @@ class Usuario extends ActiveRecord {
     public $token;
     public $rol;
     public $confirmado;
+    public $token_google;
 
     public function __construct($args = [])
     {
@@ -24,7 +25,8 @@ class Usuario extends ActiveRecord {
         $this->password = $args['password'] ?? '';
         $this->token = $args['token'] ?? '';
         $this->rol = $args['rol'] ?? "usuario";
-        $this->confirmado = $args['confirmado'] ?? 0;
+        $this->confirmado = $args['confirmado'] ?? "";
+        $this->token_google = $args['token_google'] ?? "";
     }
 
     // Validar el Login de Usuarios
@@ -76,7 +78,7 @@ class Usuario extends ActiveRecord {
     // Valida el Password 
     public function validar_password() {
         if(!$this->password) {
-            self::$alertas['error'][] = 'La contraseña no puede ir vacio';
+            self::$alertas['error'][] = 'La contraseña no puede ir vacia';
         }
         if(strlen($this->password) < 8) {
             self::$alertas['error'][] = 'La contraseña debe contener al menos 8 caracteres';
@@ -91,6 +93,6 @@ class Usuario extends ActiveRecord {
 
     // Generar un Token
     public function crearToken() : void {
-        $this->token = uniqid();
+        $this->token = md5(uniqid());
     }
 }

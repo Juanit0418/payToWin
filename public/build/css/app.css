@@ -346,6 +346,22 @@ h3 {
   text-align: center;
 }
 
+[class$=__heading] {
+  font-family: "Outfit", sans-serif;
+  font-weight: 900;
+  margin: 2rem 0;
+  margin: 6rem 0 3rem 0;
+  text-align: center;
+}
+
+[class$=__descripcion] {
+  text-align: center;
+  font-size: 1.8rem;
+  font-weight: 300;
+  color: #1E293B;
+  margin-bottom: 5rem;
+}
+
 .modal-container {
   position: fixed;
   top: 0;
@@ -486,5 +502,142 @@ h3 {
 .sliderButton:active {
   cursor: grabbing;
   background: #45a049;
+}
+
+.formulario {
+  padding: 2rem;
+  margin: 1rem auto;
+}
+.formulario__campo {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.formulario__label {
+  display: block;
+  font-size: 1.8rem;
+  color: rgba(26, 27, 21, 0.8);
+  font-weight: bold;
+}
+.formulario__input {
+  padding: 1rem;
+  border: 1px solid rgb(176.6, 199, 221.4);
+  border-radius: 0.5rem;
+}
+.formulario__boton {
+  background-color: #007df4;
+  padding: 1.5rem 4rem;
+  color: #FFFFFF;
+  font-size: 1.8rem;
+  font-weight: 700;
+  border: none;
+  transition-property: background-color;
+  transition-duration: 0.3s;
+  text-align: center;
+  width: 100%;
+  display: inline-block;
+  display: inline-block;
+}
+.formulario__boton:hover {
+  background-color: rgb(0, 98.8729508197, 193);
+  cursor: pointer;
+}
+
+.alerta {
+  padding: 1rem 2rem;
+  margin: 1rem auto;
+  border-radius: 0.5rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+}
+.alerta__error {
+  background-color: #ff7676;
+  border-left: 0.5rem solid rgb(169, 0, 0);
+  color: rgb(169, 0, 0);
+}
+.alerta__exito {
+  background-color: rgb(170.7692307692, 254.2307692308, 170.7692307692);
+  border-left: 0.5rem solid #02db02;
+  color: #02db02;
+  color: rgb(1.0769230769, 117.9230769231, 1.0769230769);
+}
+.alerta__ocultar {
+  display: none;
+}
+
+.acciones {
+  padding: 2rem;
+  margin: 1rem auto;
+  display: flex;
+  justify-content: space-between;
+}
+
+.login {
+  width: 90%;
+  max-width: 120rem;
+  margin: 0 auto;
+}
+.login__contenedor {
+  width: 90%;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.registro {
+  width: 90%;
+  max-width: 120rem;
+  margin: 0 auto;
+}
+.registro__contenedor {
+  width: 90%;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.olvide {
+  width: 90%;
+  max-width: 120rem;
+  margin: 0 auto;
+}
+.olvide__contenedor {
+  width: 90%;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.reestablecer {
+  width: 90%;
+  max-width: 120rem;
+  margin: 0 auto;
+}
+.reestablecer__contenedor {
+  width: 90%;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.mensaje {
+  width: 90%;
+  max-width: 120rem;
+  margin: 0 auto;
+}
+.mensaje__contenedor {
+  width: 90%;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.confirmar {
+  width: 90%;
+  max-width: 120rem;
+  margin: 0 auto;
+}
+.confirmar__contenedor {
+  width: 90%;
+  max-width: 90rem;
+  margin: 0 auto;
 }
 /*# sourceMappingURL=app.css.map */

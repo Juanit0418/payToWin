@@ -16,6 +16,16 @@ $router->post('/logout', [AuthController::class, 'logout']);
 // Crear Cuenta
 $router->get('/registro', [AuthController::class, 'registro']);
 $router->post('/registro', [AuthController::class, 'registro']);
+// Olvide Password
+$router->get('/olvide', [AuthController::class, 'olvide']);
+$router->post('/olvide', [AuthController::class, 'olvide']);
+// Reestablecer Password
+$router->get('/reestablecer', [AuthController::class, 'reestablecer']);
+$router->post('/reestablecer', [AuthController::class, 'reestablecer']);
+// Mensaje
+$router->get('/mensaje', [AuthController::class, 'mensaje']);
+// Confirmar Cuenta
+$router->get('/confirmar', [AuthController::class, 'confirmar']);
 
 
 $router->comprobarRutas();

@@ -11,13 +11,13 @@
         @content;
     }
 }
-@mixin desktop {
-    @media (min-width: v.$desktop) {
+@mixin pc {
+    @media (min-width: v.$pc) {
         @content;
     }
 }
-@mixin xl_desktop {
-    @media (min-width: v.$xl_desktop) {
+@mixin pc_grande {
+    @media (min-width: v.$pc_grande) {
         @content;
     }
 }
@@ -45,4 +45,67 @@
     display: grid;
     gap: $espaciado;
     grid-template-columns: repeat($columnas, 1fr);
+}
+
+@mixin contenedor {
+    width: 90%;
+    max-width: 120rem;
+    margin: 0 auto;
+}
+
+@mixin contenedor_md {
+    width: 90%;
+    max-width: 90rem;
+    margin: 0 auto;
+}
+
+@mixin contenedor_sm {
+    width: 90%;
+    max-width: 60rem;
+    margin: 0 auto;
+}
+
+@mixin heading {
+    font-family: v.$fuente-principal;
+    font-weight: v.$black;
+    margin: 2rem 0;
+}
+
+@mixin nombre_pagina {
+    @include heading;
+    margin: 6rem 0 3rem 0;
+    text-align: center;
+}
+
+@mixin descripcion_pagina {
+    text-align: center;
+    font-size: 1.8rem;
+    font-weight: v.$delgada;
+    color: v.$gris-oscuro;
+    margin-bottom: 5rem;
+}
+
+@mixin alerta($color){
+    background-color: lighten($color, 40%);
+    border-left: 0.5rem solid $color;
+    color: $color;
+}
+
+@mixin boton($color, $texto) {
+    background-color: $color;
+    padding: 1.5rem 4rem;
+    color: $texto;
+    font-size: 1.8rem;
+    font-weight: 700;
+    border: none;
+    transition-property: background-color;
+    transition-duration: .3s;
+    text-align: center;
+    width: 100%;
+    display: inline-block;
+
+    &:hover {
+        background-color: darken( $color, 10% );
+        cursor: pointer;
+    }
 }
